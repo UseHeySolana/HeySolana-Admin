@@ -1,70 +1,153 @@
-# Welcome to your Lovable project
+# HeySolana Admin Dashboard
 
-## Project info
+A React-based admin dashboard for managing HeySolana application data, user analytics, and system administration.
 
-**URL**: https://lovable.dev/projects/0f220d77-f9ea-4960-9e52-cb92c2fe56eb
+## Features
 
-## How can I edit this code?
+- 🔐 **Secure Authentication** with two-factor verification
+- 📊 **Analytics Dashboard** for tracking user engagement
+- 👥 **User Management** and waitlist administration  
+- 🔄 **Session Persistence** with automatic token management
+- 📱 **Responsive Design** optimized for all devices
+- 🚀 **Real-time Updates** with cross-tab synchronization
 
-There are several ways of editing your application.
+## Session Management
 
-**Use Lovable**
+The dashboard now includes robust session management features:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/0f220d77-f9ea-4960-9e52-cb92c2fe56eb) and start prompting.
+### Automatic Session Persistence
+- Sessions persist across page refreshes and browser tabs
+- Automatic token expiration handling (24-hour default)
+- Cross-tab synchronization for consistent login state
+- Graceful handling of expired sessions
 
-Changes made via Lovable will be committed automatically to this repo.
+### Authentication Flow
+1. **Login**: Email and password authentication
+2. **Verification**: Two-factor code sent to email
+3. **Session**: Secure token stored with expiration tracking
+4. **Auto-logout**: Expired tokens are automatically cleared
 
-**Use your preferred IDE**
+### Session Features
+- ✅ Persists login state on page refresh
+- ✅ Maintains user data across navigation
+- ✅ Automatic logout on token expiration
+- ✅ Cross-tab session synchronization
+- ✅ Loading states during authentication checks
+- ✅ Proper error handling for expired sessions
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Getting Started
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Prerequisites
+- Node.js 16+ or Bun
+- Access to HeySolana backend API
 
-Follow these steps:
+### Installation
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd Heysolana-admin-dashboard
+   ```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+2. **Install dependencies**
+   ```bash
+   npm install
+   # or
+   bun install
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+3. **Configure environment**
+   
+   Create a `.env` file in the root directory:
+   ```env
+   VITE_API_BASE_URL=https://your-api-domain.com/api
+   VITE_NODE_ENV=development
+   ```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+4. **Start the development server**
+   ```bash
+   npm run dev
+   # or
+   bun run dev
+   ```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_BASE_URL` | Backend API base URL | Required |
+| `VITE_NODE_ENV` | Environment mode | `development` |
+
+## Project Structure
+
+```
+src/
+├── components/           # Reusable UI components
+│   ├── AuthContext.tsx  # Authentication state management
+│   └── ui/              # UI component library
+├── pages/               # Application pages
+├── services/            # API service layer
+├── hooks/               # Custom React hooks
+├── layouts/             # Layout components
+└── config/              # Configuration files
 ```
 
-**Edit a file directly in GitHub**
+## API Integration
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+The dashboard integrates with the HeySolana backend API for:
 
-**Use GitHub Codespaces**
+- **Authentication**: Login, verification, session management
+- **User Analytics**: User distribution, registration trends
+- **Waitlist Management**: Add, view, and manage waitlist users
+- **Tracking Data**: Button clicks, tool usage, page views
+- **Admin Management**: Create and manage admin users
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Development
 
-## What technologies are used for this project?
+### Available Scripts
 
-This project is built with .
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Authentication Testing
 
-## How can I deploy this project?
+To test the authentication flow:
 
-Simply open [Lovable](https://lovable.dev/projects/0f220d77-f9ea-4960-9e52-cb92c2fe56eb) and click on Share -> Publish.
+1. Navigate to the login page
+2. Enter valid admin credentials
+3. Check email for verification code
+4. Enter the verification code
+5. Verify session persists on page refresh
 
-## I want to use a custom domain - is that possible?
+## Session Troubleshooting
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
-# HeySolana-Admin
+If you experience session issues:
+
+1. **Check browser console** for authentication errors
+2. **Verify API connectivity** and environment variables
+3. **Clear localStorage** if sessions are corrupted:
+   ```javascript
+   localStorage.clear()
+   ```
+4. **Check network tab** for 401 responses indicating expired tokens
+
+## Security
+
+- All API requests include automatic authentication headers
+- Tokens are validated and refreshed automatically
+- Expired sessions are handled gracefully
+- Cross-tab logout synchronization for security
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test authentication and session management
+5. Submit a pull request
+
+## License
+
+Private repository for HeySolana project.
