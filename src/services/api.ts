@@ -1,16 +1,6 @@
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/config/env";
 
-export interface WaitlistUser {
-  id: number;
-  email_address: string;
-  first_name: string;
-  last_name: string;
-  country: string;
-  wallet_address: string;
-  created_at?: string;
-}
-
 export interface UserProfile {
   id: number;
   name: string;
@@ -64,6 +54,41 @@ export interface TrackingData {
   token_usage_by_token_name: NameValueData[];
 }
 
+export interface EngagementDauPoint {
+  date: string;
+  active_users: number;
+}
+
+export interface EngagementSummary {
+  dau_today: number;
+  wau: number;
+  mau_rolling: number;
+  mau_prev_window: number;
+  stickiness: number | null;
+}
+
+export interface JourneyEdge {
+  source: string;
+  target: string;
+  value: number;
+}
+
+export interface JourneyPopularPage {
+  event_name: string;
+  views: number;
+}
+
+export interface EngagementAnalytics {
+  available: boolean;
+  message?: string;
+  dau_series: EngagementDauPoint[];
+  dau_series_source?: string;
+  dau_series_note?: string;
+  summary: EngagementSummary | null;
+  journey_edges: JourneyEdge[];
+  journey_popular_pages: JourneyPopularPage[];
+}
+
 // Error handling helper
 const handleError = (error: Error | { response?: { data?: { message?: string } }; message?: string }) => {
   console.error("API Error:", error);
@@ -78,9 +103,10 @@ const handleError = (error: Error | { response?: { data?: { message?: string } }
 // Enhanced fetch function with automatic token handling
 const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('auth_token');
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers,
   };
@@ -123,25 +149,6 @@ export const validateToken = async (): Promise<boolean> => {
   }
 };
 
-// Get waitlist users
-export const getWaitlistUsers = async (): Promise<WaitlistUser[]> => {
-  try {
-    console.log("Fetching waitlist users from", `${API_BASE_URL}/get_waitlist`);
-    const response = await authenticatedFetch(`${API_BASE_URL}/get_waitlist`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch waitlist: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log("Waitlist data:", data);
-    return data || [];
-  } catch (error) {
-    handleError(error);
-    return [];
-  }
-};
-
 // Get tracking data
 export const getTrackingData = async (): Promise<TrackingData | null> => {
   try {
@@ -161,24 +168,202 @@ export const getTrackingData = async (): Promise<TrackingData | null> => {
   }
 };
 
-// Add a user to the waitlist
-export const addToWaitlist = async (userData: Omit<WaitlistUser, 'id'>): Promise<boolean> => {
+export const getEngagementAnalytics = async (
+  days: 7 | 30 | 90 = 30
+): Promise<EngagementAnalytics | null> => {
   try {
-    console.log("Adding user to waitlist:", userData);
-    const response = await authenticatedFetch(`${API_BASE_URL}/add_to_waitlist`, {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-    
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/track/engagement-analytics?days=${days}`
+    );
+
     if (!response.ok) {
-      throw new Error(`Failed to add to waitlist: ${response.statusText}`);
+      throw new Error(`Failed to fetch engagement analytics: ${response.statusText}`);
     }
-    
-    toast.success('User added to waitlist successfully');
-    return true;
+
+    const data = (await response.json()) as EngagementAnalytics;
+    return data;
   } catch (error) {
     handleError(error);
-    return false;
+    return null;
+  }
+};
+
+// ============ App Transactions / TVP ============
+
+export type TransactionMetricsCluster = "mainnet" | "devnet" | "all";
+export type TransactionMetricsDays = 7 | 30 | 90 | 365;
+
+export interface TransactionMetricsSummary {
+  tx_count: number;
+  total_input_usd: number;
+  total_output_usd: number;
+  total_fee_usd: number;
+}
+
+export interface TransactionMetricByType {
+  transaction_type: string;
+  count: number;
+  volume_usd: number;
+  fee_usd: number;
+}
+
+export interface TransactionMetricByDay {
+  date: string;
+  count: number;
+  volume_usd: number;
+  fee_usd: number;
+}
+
+export interface TransactionMetricByCluster {
+  cluster: "mainnet" | "devnet";
+  count: number;
+  volume_usd: number;
+}
+
+export interface TransactionMetricByApp {
+  app_called: string;
+  count: number;
+  volume_usd: number;
+  fee_usd: number;
+}
+
+export interface TransactionMetricByProvider {
+  provider: string;
+  count: number;
+  volume_usd: number;
+  fee_usd: number;
+}
+
+export interface TransactionMetrics {
+  available: boolean;
+  message?: string;
+  cluster: TransactionMetricsCluster;
+  days: number;
+  summary: TransactionMetricsSummary;
+  by_type: TransactionMetricByType[];
+  by_day: TransactionMetricByDay[];
+  by_cluster: TransactionMetricByCluster[];
+  by_app: TransactionMetricByApp[];
+  by_provider: TransactionMetricByProvider[];
+}
+
+export type AppTransactionStatus = "pending" | "submitted" | "confirmed" | "failed";
+
+export interface AppTransaction {
+  id: number;
+  client_reference: string | null;
+  signature: string | null;
+  cluster: "mainnet" | "devnet";
+  wallet_address: string;
+  username: string | null;
+  mobile_number: string | null;
+  transaction_type: string;
+  status: AppTransactionStatus | string;
+  provider: string | null;
+  amount: string | number | null;
+  token: string | null;
+  input_token_mint: string | null;
+  input_token_symbol: string | null;
+  input_amount: string | number | null;
+  input_amount_usd: string | number | null;
+  output_token_mint: string | null;
+  output_token_symbol: string | null;
+  output_amount: string | number | null;
+  output_amount_usd: string | number | null;
+  platform_fee_amount: string | number | null;
+  platform_fee_token: string | null;
+  platform_fee_usd: string | number | null;
+  network_fee_lamports: number | null;
+  recipient_address: string | null;
+  app_called: string | null;
+  raw_metadata: Record<string, unknown> | null;
+  confirmed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AppTransactionsFilters {
+  cluster?: TransactionMetricsCluster;
+  status?: string;
+  transaction_type?: string;
+  provider?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export interface AppTransactionsResponse {
+  success: boolean;
+  data: AppTransaction[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+export const getTransactionMetrics = async (
+  cluster: TransactionMetricsCluster = "mainnet",
+  days: TransactionMetricsDays = 30
+): Promise<TransactionMetrics | null> => {
+  try {
+    const params = new URLSearchParams({
+      cluster,
+      days: String(days),
+    });
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/app-transactions/metrics?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch transaction metrics: ${response.statusText}`);
+    }
+
+    return (await response.json()) as TransactionMetrics;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getAppTransactions = async (
+  filters: AppTransactionsFilters = {}
+): Promise<AppTransactionsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.cluster) params.set("cluster", filters.cluster);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.transaction_type) params.set("transaction_type", filters.transaction_type);
+    if (filters.provider) params.set("provider", filters.provider);
+    if (filters.search) params.set("search", filters.search);
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/app-transactions${params.toString() ? `?${params.toString()}` : ""}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch transactions: ${response.statusText}`);
+    }
+
+    return (await response.json()) as AppTransactionsResponse;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getAppTransaction = async (id: number): Promise<AppTransaction | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/app-transactions/${id}`);
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.message || `Failed to fetch transaction: ${response.statusText}`);
+    return (json.data ?? null) as AppTransaction | null;
+  } catch (error) {
+    handleError(error);
+    return null;
   }
 };
 
@@ -375,6 +560,27 @@ export const fetchAdmins = async (): Promise<UserProfile[]> => {
   }
 };
 
+// Reset an admin password (emails new temporary password)
+export const resetAdminPassword = async (adminId: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/reset-admin-password`, {
+      method: 'POST',
+      body: JSON.stringify({ id: adminId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to reset password: ${response.statusText}`);
+    }
+
+    toast.success('Password reset email sent');
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
 // User Distribution Analytics Interfaces
 export interface CountryDistribution {
   country: string;
@@ -443,9 +649,17 @@ export interface User {
   id: number;
   username: string;
   phone_number: string;
+  email?: string | null;
+  country?: string | null;
+  google_id?: string | null;
   wallet_address: string;
+  wallet_type?: string | null;
+  mpc_upgraded_at?: string | null;
   pin: string;
   verification_status?: string;
+  last_active_at?: string | null;
+  last_active_days?: number | null;
+  active_device_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -453,6 +667,9 @@ export interface User {
 export interface UsersResponse {
   users: User[];
   total: number;
+  verified_count: number;
+  wallet_users_count: number;
+  pin_users_count: number;
   current_page: number;
   last_page: number;
   per_page: number;
@@ -462,6 +679,7 @@ export interface UsersFilters {
   search?: string;
   status?: string;
   wallet_status?: string;
+  inactive_days?: number;
   page?: number;
   per_page?: number;
   sort_field?: string;
@@ -495,6 +713,7 @@ export const getUsers = async (filters: UsersFilters = {}): Promise<UsersRespons
       users = users.filter(user =>
         user.username?.toLowerCase().includes(filters.search!.toLowerCase()) ||
         user.phone_number?.includes(filters.search) ||
+        user.email?.toLowerCase().includes(filters.search!.toLowerCase()) ||
         user.wallet_address?.toLowerCase().includes(filters.search.toLowerCase())
       );
     }
@@ -516,6 +735,14 @@ export const getUsers = async (filters: UsersFilters = {}): Promise<UsersRespons
         users = users.filter(user => !user.wallet_address || user.wallet_address === '');
       }
     }
+
+    if (filters.inactive_days) {
+      users = users.filter(user =>
+        (user.active_device_count ?? 0) > 0 &&
+        typeof user.last_active_days === 'number' &&
+        user.last_active_days >= filters.inactive_days!
+      );
+    }
     
     // Apply sorting
     if (filters.sort_field) {
@@ -532,6 +759,15 @@ export const getUsers = async (filters: UsersFilters = {}): Promise<UsersRespons
     }
     
     const total = users.length;
+    const verified_count = users.filter(
+      (user) => user.verification_status === 'verified'
+    ).length;
+    const wallet_users_count = users.filter(
+      (user) => user.wallet_address && user.wallet_address !== ''
+    ).length;
+    const pin_users_count = users.filter(
+      (user) => user.pin && user.pin !== ''
+    ).length;
     const current_page = filters.page || 1;
     const per_page = filters.per_page || 10;
     const last_page = Math.ceil(total / per_page);
@@ -544,6 +780,9 @@ export const getUsers = async (filters: UsersFilters = {}): Promise<UsersRespons
     return {
       users: paginatedUsers,
       total,
+      verified_count,
+      wallet_users_count,
+      pin_users_count,
       current_page,
       last_page,
       per_page
@@ -567,6 +806,9 @@ export const getUser = async (id: number): Promise<User | null> => {
     
     const data = await response.json();
     console.log("User data:", data);
+    if (data?.status === 'failed') {
+      return null;
+    }
     return data;
   } catch (error) {
     handleError(error);
@@ -888,6 +1130,158 @@ export const updateCrossmintOrderStatus = async (
   }
 };
 
+// ============ Chowdeck Orders (Admin) ============
+
+export interface ChowdeckOrderItem {
+  id: number;
+  menu_id: number;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  product_image_url?: string | null;
+  modifiers?: Array<{ name?: string; option_name?: string; price?: number }> | null;
+}
+
+export interface ChowdeckOrderHistoryEntry {
+  id: number;
+  status: string;
+  status_description?: string;
+  timestamp: string;
+  notes?: string;
+  updated_by?: string;
+}
+
+export interface ChowdeckOrder {
+  id: number;
+  order_number: string;
+  wallet_address: string;
+  vendor_id: number;
+  vendor_name?: string | null;
+  place_id?: string | null;
+  formatted_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  phone_number?: string | null;
+  customer_name?: string | null;
+  status: string;
+  total_amount: number;
+  currency: string;
+  payment_method?: string | null;
+  payment_status: string;
+  order_date: string;
+  notes?: string | null;
+  delivery_instructions?: string | null;
+  delivery_fee?: number | null;
+  tax_amount?: number | null;
+  subtotal?: number | null;
+  discount_amount?: number | null;
+  amount_usd?: number | null;
+  created_at: string;
+  updated_at: string;
+  order_items?: ChowdeckOrderItem[];
+  order_history?: ChowdeckOrderHistoryEntry[];
+  user?: JumiaOrderUser;
+}
+
+export interface ChowdeckOrdersResponse {
+  success: boolean;
+  data: ChowdeckOrder[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+export interface ChowdeckOrderStats {
+  total_orders: number;
+  pending_orders: number;
+  processing_orders: number;
+  out_for_delivery_orders: number;
+  delivered_orders: number;
+  cancelled_orders: number;
+  total_revenue: number;
+}
+
+export interface ChowdeckOrdersFilters {
+  status?: string;
+  payment_status?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export const getChowdeckOrders = async (
+  filters: ChowdeckOrdersFilters = {}
+): Promise<ChowdeckOrdersResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.status) params.set('status', filters.status);
+    if (filters.payment_status) params.set('payment_status', filters.payment_status);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.per_page) params.set('per_page', String(filters.per_page));
+    const url = `${API_BASE_URL}/admin/chowdeck/orders${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await authenticatedFetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch Chowdeck orders: ${response.statusText}`);
+    return await response.json();
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getChowdeckOrder = async (
+  orderId: number
+): Promise<{ success: boolean; data: ChowdeckOrder } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/chowdeck/orders/${orderId}`);
+    if (!response.ok) throw new Error(`Failed to fetch Chowdeck order: ${response.statusText}`);
+    return await response.json();
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const updateChowdeckOrderStatus = async (
+  orderId: number,
+  payload: {
+    status: string;
+    status_description?: string;
+    payment_status?: string;
+    notes?: string;
+  }
+): Promise<{ success: boolean; message: string; data: ChowdeckOrder } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/chowdeck/orders/${orderId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || `Failed to update Chowdeck order: ${response.statusText}`);
+    toast.success('Order status updated');
+    return data;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getChowdeckOrderStats = async (): Promise<ChowdeckOrderStats | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/chowdeck/orders/stats`);
+    if (!response.ok) throw new Error(`Failed to fetch Chowdeck order stats: ${response.statusText}`);
+    const json = await response.json();
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
 // ============ Admin Settings (Processing Fee) ============
 
 export interface ProcessingFeeSettings {
@@ -897,6 +1291,38 @@ export interface ProcessingFeeSettings {
   treasury_wallet_address: string;
   delivery_fee_jumia_ngn: string;
   delivery_fee_crossmint_usd: string;
+  /** Jupiter referral account pubkey for swap integrator fees */
+  jupiter_referral_account: string;
+  /** Basis points (50–255). Use 0 to disable Hey Solana swap fee. */
+  jupiter_referral_fee_bps: string;
+  /** PajCash onramp integrator fee in USDC (sent as businessUSDCFee). */
+  pajcash_onramp_usdc_fee: string;
+  /** PajCash offramp integrator fee in USDC (sent as businessUSDCFee). */
+  pajcash_offramp_usdc_fee: string;
+  /** Email address to notify when new bug reports arrive */
+  bug_report_email: string;
+  /** Email address to notify when users send support chat messages */
+  support_inbox_email: string;
+  /** Primary email for admin dashboard alerts (new users, transactions, etc.) */
+  admin_notification_email: string;
+  /** Master switch for Hey Points (cashback earn + redeem in wallet). */
+  hey_points_enabled: string;
+  airtime_cashback_enabled: string;
+  airtime_cashback_percent: string;
+  airtime_cashback_min_purchase_ngn: string;
+  airtime_cashback_max_points_per_txn: string;
+  points_redeem_airtime_enabled: string;
+  points_redeem_gas_enabled: string;
+  points_max_redeem_percent_airtime: string;
+  points_lamports_per_point: string;
+  /** When on, points redemption uses backend-signed treasury Airbills checkout. */
+  hey_points_treasury_enabled: string;
+  /** Twitter / X link shown in welcome emails */
+  email_twitter_url: string;
+  /** Telegram link shown in welcome emails */
+  email_telegram_url: string;
+  /** Community link for the welcome email CTA */
+  email_community_url: string;
 }
 
 export const getProcessingFeeSettings = async (): Promise<ProcessingFeeSettings | null> => {
@@ -904,6 +1330,1411 @@ export const getProcessingFeeSettings = async (): Promise<ProcessingFeeSettings 
     const response = await authenticatedFetch(`${API_BASE_URL}/admin/settings/processing-fee`);
     if (!response.ok) throw new Error(`Failed to fetch settings: ${response.statusText}`);
     const json = await response.json();
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+// ============ Admin Inbox Notifications ============
+
+export type AdminInboxNotificationType = 'new_user' | 'transaction' | 'support_message';
+
+export interface AdminInboxNotification {
+  id: number;
+  type: AdminInboxNotificationType;
+  title: string;
+  body: string;
+  link: string | null;
+  payload: Record<string, unknown> | null;
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getAdminInboxNotifications = async (options?: {
+  unreadOnly?: boolean;
+  limit?: number;
+}): Promise<AdminInboxNotification[]> => {
+  try {
+    const params = new URLSearchParams();
+    if (options?.unreadOnly) params.set('unread_only', '1');
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/inbox/notifications${params.toString() ? `?${params.toString()}` : ''}`
+    );
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.message || 'Failed to load notifications');
+    return (json.data ?? []) as AdminInboxNotification[];
+  } catch (error) {
+    handleError(error);
+    return [];
+  }
+};
+
+export const getAdminInboxUnreadCount = async (): Promise<number> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/inbox/notifications/unread-count`
+    );
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.message || 'Failed to load unread count');
+    return json.data?.unread_count ?? 0;
+  } catch {
+    return 0;
+  }
+};
+
+export const markAdminInboxNotificationRead = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/inbox/notifications/${id}/read`,
+      { method: 'PATCH' }
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+export const markAllAdminInboxNotificationsRead = async (): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/inbox/notifications/mark-all-read`,
+      { method: 'POST' }
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+// ============ Push notifications (Admin) ============
+
+export interface PushRecipient {
+  id: number;
+  user_id: number | null;
+  phone_number: string | null;
+  username: string | null;
+  device_type: "ios" | "android";
+  is_active: boolean;
+  push_token_preview: string;
+  last_used_at: string | null;
+  last_active_days: number | null;
+  updated_at: string | null;
+}
+
+export interface PushRecipientsFilters {
+  search?: string;
+  device_type?: "ios" | "android" | "all";
+  phone_number?: string;
+  user_id?: number;
+  active_only?: boolean;
+  inactive_days?: number;
+  page?: number;
+  per_page?: number;
+}
+
+export interface PushRecipientsResponse {
+  recipients: PushRecipient[];
+  meta: {
+    total: number;
+    unique_phones: number;
+    current_page: number;
+    per_page: number;
+    last_page: number;
+  };
+}
+
+export interface PushPreviewResponse {
+  device_count: number;
+  user_count: number;
+  ios_count: number;
+  android_count: number;
+}
+
+export interface AdminSendPushPayload {
+  title: string;
+  body: string;
+  target: "all" | "filtered" | "selected";
+  device_type?: "ios" | "android";
+  search?: string;
+  phone_number?: string;
+  phone_numbers?: string[];
+  user_ids?: number[];
+  token_ids?: number[];
+  active_only?: boolean;
+  inactive_days?: number;
+  data?: Record<string, unknown>;
+}
+
+export const getPushRecipients = async (
+  filters: PushRecipientsFilters = {}
+): Promise<PushRecipientsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (filters.device_type && filters.device_type !== "all") {
+      params.set("device_type", filters.device_type);
+    }
+    if (filters.phone_number) params.set("phone_number", filters.phone_number);
+    if (filters.user_id) params.set("user_id", String(filters.user_id));
+    if (filters.active_only === false) params.set("active_only", "0");
+    if (filters.inactive_days) params.set("inactive_days", String(filters.inactive_days));
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const url = `${API_BASE_URL}/admin/notifications/recipients${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
+    const response = await authenticatedFetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch recipients: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const previewAdminPush = async (
+  payload: Omit<AdminSendPushPayload, "title" | "body">
+): Promise<PushPreviewResponse | null> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/notifications/preview`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `Preview failed: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const sendAdminPush = async (
+  payload: AdminSendPushPayload
+): Promise<{
+  sent_count: number;
+  queued_count: number;
+  device_count: number;
+  batch_key?: string;
+} | null> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/notifications/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...payload,
+          data: payload.data ?? { type: "admin_broadcast" },
+        }),
+      }
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(json.message || `Send failed: ${response.statusText}`);
+    }
+
+    const queuedCount = Number(json.queued_count ?? 0);
+    const sentCount = Number(json.sent_count ?? 0);
+    const deviceCount = Number(json.device_count ?? 0) || queuedCount || sentCount;
+
+    if (queuedCount > 0) {
+      toast.success(`Queued for ${queuedCount} device(s) — cron will deliver shortly`);
+    } else {
+      toast.success(`Sent to ${sentCount} device(s)`);
+    }
+
+    return {
+      sent_count: sentCount,
+      queued_count: queuedCount,
+      device_count: deviceCount,
+      batch_key: json.batch_key,
+    };
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+// ============ Notification Nudges (Admin) ============
+
+export type NotificationNudgeAction =
+  | { type: "route"; path: string }
+  | { type: "external"; url: string };
+
+export interface NotificationNudge {
+  id: number;
+  campaign_key: string;
+  enabled: boolean;
+  headline: string;
+  highlight: string | null;
+  body: string | null;
+  image: string | null;
+  ctaLabel: string | null;
+  action: NotificationNudgeAction | null;
+  priority: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  stats?: {
+    shown: number;
+    unique_viewers: number;
+    dismissed: number;
+    cta_clicks: number;
+    cta_rate: number;
+  };
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface NotificationNudgePayload {
+  campaign_key?: string;
+  is_active: boolean;
+  headline: string;
+  highlight?: string | null;
+  body?: string | null;
+  image_url?: string | null;
+  cta_label?: string | null;
+  action_type?: "route" | "external" | null;
+  action_value?: string | null;
+  priority?: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
+}
+
+export interface NotificationNudgesResponse {
+  success: boolean;
+  data: NotificationNudge[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+const getNotificationNudgeErrorMessage = (
+  json: { message?: string; errors?: Record<string, string[]> },
+  fallback: string
+) => {
+  const firstValidationError = json.errors
+    ? Object.values(json.errors).flat().find(Boolean)
+    : null;
+  return firstValidationError || json.message || fallback;
+};
+
+export const getNotificationNudges = async (
+  filters: { search?: string; active?: boolean; page?: number; per_page?: number } = {}
+): Promise<NotificationNudgesResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (typeof filters.active === "boolean") params.set("active", filters.active ? "1" : "0");
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/notification-nudges${params.toString() ? `?${params.toString()}` : ""}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getNotificationNudgeErrorMessage(
+          json,
+          `Failed to fetch notification nudges: ${response.statusText}`
+        )
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const createNotificationNudge = async (
+  payload: NotificationNudgePayload
+): Promise<NotificationNudge | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/notification-nudges`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getNotificationNudgeErrorMessage(json, `Failed to create nudge: ${response.statusText}`)
+      );
+    }
+    toast.success("Notification nudge created");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getNotificationNudge = async (
+  id: number
+): Promise<{ success: boolean; data: NotificationNudge } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/notification-nudges/${id}`);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getNotificationNudgeErrorMessage(json, `Failed to fetch nudge: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const updateNotificationNudge = async (
+  id: number,
+  payload: NotificationNudgePayload
+): Promise<NotificationNudge | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/notification-nudges/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getNotificationNudgeErrorMessage(json, `Failed to update nudge: ${response.statusText}`)
+      );
+    }
+    toast.success("Notification nudge updated");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const deleteNotificationNudge = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/notification-nudges/${id}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getNotificationNudgeErrorMessage(json, `Failed to delete nudge: ${response.statusText}`)
+      );
+    }
+    toast.success("Notification nudge deleted");
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
+// ============ Scheduled push campaigns (Admin) ============
+
+export type ScheduledPushScheduleType = "daily" | "weekly" | "interval";
+export type ScheduledPushTarget = "all" | "filtered" | "inactive";
+
+export interface ScheduledPushCampaign {
+  id: number;
+  name: string;
+  campaign_key: string;
+  is_active: boolean;
+  title: string;
+  body: string;
+  link: string | null;
+  schedule_type: ScheduledPushScheduleType;
+  schedule_time: string | null;
+  schedule_day: number | null;
+  interval_minutes: number | null;
+  target: ScheduledPushTarget;
+  device_type: "ios" | "android" | null;
+  inactive_days: number | null;
+  search: string | null;
+  cooldown_hours: number;
+  max_recipients_per_run: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  stats?: {
+    total_sends: number;
+    unique_users: number;
+    total_devices: number;
+    last_sent_at: string | null;
+  };
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ScheduledPushCampaignPayload {
+  name: string;
+  campaign_key?: string;
+  is_active: boolean;
+  title: string;
+  body: string;
+  link?: string | null;
+  schedule_type: ScheduledPushScheduleType;
+  schedule_time?: string | null;
+  schedule_day?: number | null;
+  interval_minutes?: number | null;
+  target: ScheduledPushTarget;
+  device_type?: "ios" | "android" | null;
+  inactive_days?: number | null;
+  search?: string | null;
+  cooldown_hours?: number;
+  max_recipients_per_run?: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
+}
+
+export interface ScheduledPushCampaignsResponse {
+  success: boolean;
+  data: ScheduledPushCampaign[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+const getScheduledPushErrorMessage = (
+  json: { message?: string; errors?: Record<string, string[]> },
+  fallback: string
+) => {
+  const firstValidationError = json.errors
+    ? Object.values(json.errors).flat().find(Boolean)
+    : null;
+  return firstValidationError || json.message || fallback;
+};
+
+export const getScheduledPushCampaigns = async (
+  filters: { search?: string; active?: boolean; page?: number; per_page?: number } = {}
+): Promise<ScheduledPushCampaignsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (typeof filters.active === "boolean") params.set("active", filters.active ? "1" : "0");
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/scheduled-pushes${params.toString() ? `?${params.toString()}` : ""}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getScheduledPushErrorMessage(json, `Failed to fetch scheduled pushes: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const createScheduledPushCampaign = async (
+  payload: ScheduledPushCampaignPayload
+): Promise<ScheduledPushCampaign | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/scheduled-pushes`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getScheduledPushErrorMessage(json, `Failed to create campaign: ${response.statusText}`)
+      );
+    }
+    toast.success("Scheduled push campaign created");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getScheduledPushCampaign = async (
+  id: number
+): Promise<{ success: boolean; data: ScheduledPushCampaign } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/scheduled-pushes/${id}`);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getScheduledPushErrorMessage(json, `Failed to fetch campaign: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const updateScheduledPushCampaign = async (
+  id: number,
+  payload: Partial<ScheduledPushCampaignPayload>
+): Promise<ScheduledPushCampaign | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/scheduled-pushes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getScheduledPushErrorMessage(json, `Failed to update campaign: ${response.statusText}`)
+      );
+    }
+    toast.success("Scheduled push campaign updated");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const deleteScheduledPushCampaign = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/scheduled-pushes/${id}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getScheduledPushErrorMessage(json, `Failed to delete campaign: ${response.statusText}`)
+      );
+    }
+    toast.success("Scheduled push campaign deleted");
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
+export const previewScheduledPushCampaign = async (
+  id: number
+): Promise<PushPreviewResponse | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/scheduled-pushes/${id}/preview`, {
+      method: "POST",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getScheduledPushErrorMessage(json, `Failed to preview campaign: ${response.statusText}`)
+      );
+    }
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const runScheduledPushCampaignNow = async (
+  id: number,
+  ignoreCooldown = false
+): Promise<{ users: number; devices: number; skipped_cooldown: number } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/scheduled-pushes/${id}/run-now`, {
+      method: "POST",
+      body: JSON.stringify({ ignore_cooldown: ignoreCooldown }),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getScheduledPushErrorMessage(json, `Failed to run campaign: ${response.statusText}`)
+      );
+    }
+    const users = json.data?.users ?? 0;
+    const devices = json.data?.devices ?? 0;
+    toast.success(`Sent to ${users} user(s), ${devices} device(s)`);
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+// ============ Push campaigns (Admin) ============
+
+export type PushCampaignTarget = "all" | "filtered" | "selected";
+
+export interface PushCampaign {
+  id: number;
+  name: string | null;
+  campaign_key: string;
+  status: "draft" | "sent";
+  sent: boolean;
+  title: string;
+  body: string;
+  link: string | null;
+  target: PushCampaignTarget;
+  device_type: "ios" | "android" | null;
+  search: string | null;
+  token_ids: number[];
+  phone_numbers: string[];
+  active_only: boolean;
+  sent_at: string | null;
+  device_count: number | null;
+  user_count: number | null;
+  stats?: {
+    sent: number;
+    opened: number;
+    unique_openers: number;
+    ctr_rate: number;
+  };
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PushCampaignPayload {
+  name?: string | null;
+  campaign_key?: string;
+  title: string;
+  body: string;
+  link?: string | null;
+  target: PushCampaignTarget;
+  device_type?: "ios" | "android" | null;
+  search?: string | null;
+  token_ids?: number[];
+  phone_numbers?: string[];
+  active_only?: boolean;
+  send_now?: boolean;
+}
+
+export interface PushCampaignsResponse {
+  success: boolean;
+  data: PushCampaign[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+export type PushQueueStatus = "queued" | "sent" | "failed";
+
+export interface PushQueueItem {
+  id: number;
+  batch_key: string;
+  push_campaign_id: number | null;
+  title: string;
+  body: string;
+  phone_number: string | null;
+  user_id: number | null;
+  eas_project_id: string | null;
+  push_token_preview: string;
+  status: PushQueueStatus;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PushQueueStats {
+  queued: number;
+  sent: number;
+  failed: number;
+  total: number;
+  batch_size: number;
+  recent_failures: Array<{
+    id: number;
+    batch_key: string;
+    title: string;
+    error_message: string | null;
+    updated_at: string | null;
+  }>;
+}
+
+export interface PushQueueListResponse {
+  success: boolean;
+  data: PushQueueItem[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+export const getPushQueueStats = async (): Promise<PushQueueStats | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/push-queue/stats`);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(json.message || `Failed to fetch push queue stats: ${response.statusText}`);
+    }
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getPushQueueItems = async (
+  filters: {
+    status?: PushQueueStatus | "all";
+    search?: string;
+    batch_key?: string;
+    push_campaign_id?: number;
+    page?: number;
+    per_page?: number;
+  } = {}
+): Promise<PushQueueListResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.status && filters.status !== "all") params.set("status", filters.status);
+    if (filters.search) params.set("search", filters.search);
+    if (filters.batch_key) params.set("batch_key", filters.batch_key);
+    if (filters.push_campaign_id) params.set("push_campaign_id", String(filters.push_campaign_id));
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/push-queue${params.toString() ? `?${params.toString()}` : ""}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(json.message || `Failed to fetch push queue: ${response.statusText}`);
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const processPushQueue = async (
+  limit?: number
+): Promise<{ processed: number; sent: number; failed: number; remaining: number } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/push-queue/process`, {
+      method: "POST",
+      body: JSON.stringify(limit ? { limit } : {}),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(json.message || `Failed to process push queue: ${response.statusText}`);
+    }
+    toast.success(json.message ?? "Push queue processed");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+const getPushCampaignErrorMessage = (
+  json: { message?: string; errors?: Record<string, string[]> },
+  fallback: string
+) => {
+  const firstValidationError = json.errors
+    ? Object.values(json.errors).flat().find(Boolean)
+    : null;
+  return firstValidationError || json.message || fallback;
+};
+
+export const getPushCampaigns = async (
+  filters: { search?: string; status?: "draft" | "sent"; page?: number; per_page?: number } = {}
+): Promise<PushCampaignsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/push-campaigns${params.toString() ? `?${params.toString()}` : ""}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getPushCampaignErrorMessage(json, `Failed to fetch push campaigns: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const createPushCampaign = async (
+  payload: PushCampaignPayload
+): Promise<PushCampaign | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/push-campaigns`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getPushCampaignErrorMessage(json, `Failed to create push campaign: ${response.statusText}`)
+      );
+    }
+    toast.success(json.message ?? "Push campaign saved");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getPushCampaign = async (
+  id: number
+): Promise<{ success: boolean; data: PushCampaign } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/push-campaigns/${id}`);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getPushCampaignErrorMessage(json, `Failed to fetch push campaign: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const updatePushCampaign = async (
+  id: number,
+  payload: Omit<PushCampaignPayload, "send_now">
+): Promise<PushCampaign | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/push-campaigns/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getPushCampaignErrorMessage(json, `Failed to update push campaign: ${response.statusText}`)
+      );
+    }
+    toast.success("Push campaign updated");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const deletePushCampaign = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/push-campaigns/${id}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getPushCampaignErrorMessage(json, `Failed to delete push campaign: ${response.statusText}`)
+      );
+    }
+    toast.success("Push campaign deleted");
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
+export const sendPushCampaign = async (
+  id: number
+): Promise<{ sent_count: number; device_count: number; user_count: number } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/push-campaigns/${id}/send`, {
+      method: "POST",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getPushCampaignErrorMessage(json, `Failed to send push campaign: ${response.statusText}`)
+      );
+    }
+    const queued = json.data?.queued_count ?? 0;
+    const sent = json.data?.sent_count ?? json.data?.device_count ?? 0;
+    if (queued > 0) {
+      toast.success(`Queued for ${queued} device(s) — cron will deliver shortly`);
+    } else {
+      toast.success(`Sent to ${sent} device(s)`);
+    }
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+// ============ WhatsApp campaigns (Admin) ============
+
+export interface WhatsAppCampaign {
+  id: number;
+  name: string | null;
+  campaign_key: string;
+  status: "draft" | "sent";
+  sent: boolean;
+  message_mode: WhatsAppMessageMode;
+  header: string | null;
+  body: string;
+  app_link: string | null;
+  template_name: string | null;
+  template_language: string | null;
+  target: WhatsAppTargetMode;
+  search: string | null;
+  user_ids: number[];
+  phone_numbers: string[];
+  sent_at: string | null;
+  recipient_count: number | null;
+  stats?: {
+    queued: number;
+    delivered: number;
+    failed: number;
+    sent: number;
+    link_clicks: number;
+    replies?: number;
+    unique_clickers: number;
+    ctr_rate: number;
+  };
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface WhatsAppCampaignPayload {
+  name?: string | null;
+  campaign_key?: string;
+  message_mode: WhatsAppMessageMode;
+  header?: string | null;
+  body: string;
+  app_link?: string | null;
+  template_name?: string | null;
+  template_language?: string | null;
+  target: WhatsAppTargetMode;
+  search?: string | null;
+  user_ids?: number[];
+  phone_numbers?: string[];
+  send_now?: boolean;
+}
+
+export interface WhatsAppCampaignsResponse {
+  success: boolean;
+  data: WhatsAppCampaign[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+const getWhatsAppCampaignErrorMessage = (
+  json: { message?: string; errors?: Record<string, string[]> },
+  fallback: string
+) => {
+  const firstValidationError = json.errors
+    ? Object.values(json.errors).flat().find(Boolean)
+    : null;
+  return firstValidationError || json.message || fallback;
+};
+
+export const previewWhatsAppCampaign = async (
+  payload: Omit<WhatsAppCampaignPayload, "send_now" | "body"> & { body?: string }
+): Promise<{ recipient_count: number } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/whatsapp-campaigns/preview`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getWhatsAppCampaignErrorMessage(json, `Preview failed: ${response.statusText}`)
+      );
+    }
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getWhatsAppCampaigns = async (
+  filters: { search?: string; status?: "draft" | "sent"; page?: number; per_page?: number } = {}
+): Promise<WhatsAppCampaignsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/whatsapp-campaigns${params.toString() ? `?${params.toString()}` : ""}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getWhatsAppCampaignErrorMessage(json, `Failed to fetch WhatsApp campaigns: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const createWhatsAppCampaign = async (
+  payload: WhatsAppCampaignPayload
+): Promise<WhatsAppCampaign | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/whatsapp-campaigns`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getWhatsAppCampaignErrorMessage(json, `Failed to create WhatsApp campaign: ${response.statusText}`)
+      );
+    }
+    toast.success(json.message ?? "WhatsApp campaign saved");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getWhatsAppCampaign = async (
+  id: number
+): Promise<{ success: boolean; data: WhatsAppCampaign } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/whatsapp-campaigns/${id}`);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getWhatsAppCampaignErrorMessage(json, `Failed to fetch WhatsApp campaign: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const deleteWhatsAppCampaign = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/whatsapp-campaigns/${id}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getWhatsAppCampaignErrorMessage(json, `Failed to delete WhatsApp campaign: ${response.statusText}`)
+      );
+    }
+    toast.success("WhatsApp campaign deleted");
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
+export const sendWhatsAppCampaign = async (
+  id: number
+): Promise<{
+  queued_count: number;
+  recipient_count: number;
+  processed?: number;
+  sent?: number;
+  failed?: number;
+} | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/whatsapp-campaigns/${id}/send`, {
+      method: "POST",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getWhatsAppCampaignErrorMessage(json, `Failed to send WhatsApp campaign: ${response.statusText}`)
+      );
+    }
+    toast.success(json.message ?? "WhatsApp campaign sent");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+// ============ WhatsApp messages (legacy) ============
+
+export type WhatsAppTargetMode = "all" | "filtered" | "selected";
+export type WhatsAppMessageMode = "template" | "custom";
+
+export interface AdminSendWhatsAppPayload {
+  target: WhatsAppTargetMode;
+  message_mode: WhatsAppMessageMode;
+  header?: string;
+  body?: string;
+  app_link?: string;
+  template_name?: string;
+  template_language?: string;
+  search?: string;
+  user_ids?: number[];
+  phone_numbers?: string[];
+}
+
+export interface AdminSendWhatsAppResponse {
+  campaign_id?: number;
+  queued_count: number;
+  recipient_count?: number;
+}
+
+export const sendAdminWhatsApp = async (
+  payload: AdminSendWhatsAppPayload
+): Promise<AdminSendWhatsAppResponse | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/whatsapp/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(json.message || `Queue failed: ${response.statusText}`);
+    }
+
+    const queuedCount = json.queued_count ?? json.recipient_count ?? 0;
+    toast.success(`Queued ${queuedCount} WhatsApp message(s)`);
+    return {
+      campaign_id: json.campaign_id,
+      queued_count: queuedCount,
+      recipient_count: json.recipient_count,
+    };
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+// ============ Email campaigns (Admin) ============
+
+export type EmailTargetMode = "all" | "filtered" | "selected";
+
+export interface EmailCampaign {
+  id: number;
+  name: string | null;
+  campaign_key: string;
+  status: "draft" | "sent";
+  sent: boolean;
+  subject: string;
+  body: string;
+  preview_text: string | null;
+  cta_label: string | null;
+  cta_url: string | null;
+  target: EmailTargetMode;
+  search: string | null;
+  user_ids?: number[];
+  emails?: string[];
+  sent_at: string | null;
+  recipient_count: number | null;
+  stats?: {
+    queued: number;
+    delivered: number;
+    failed: number;
+    sent: number;
+    link_clicks: number;
+    unique_clickers: number;
+    ctr_rate: number;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface EmailCampaignPayload {
+  name?: string | null;
+  subject: string;
+  body: string;
+  preview_text?: string | null;
+  cta_label?: string | null;
+  cta_url?: string | null;
+  target: EmailTargetMode;
+  search?: string | null;
+  user_ids?: number[];
+  emails?: string[];
+  send_now?: boolean;
+}
+
+export interface EmailCampaignsResponse {
+  success: boolean;
+  data: EmailCampaign[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+const getEmailCampaignErrorMessage = (
+  json: { message?: string; errors?: Record<string, string[]> },
+  fallback: string
+): string => {
+  if (json.message) return json.message;
+  const firstError = json.errors ? Object.values(json.errors).flat()[0] : undefined;
+  return firstError ?? fallback;
+};
+
+export const previewEmailCampaign = async (
+  payload: Pick<EmailCampaignPayload, "target" | "search" | "user_ids" | "emails">
+): Promise<{ recipient_count: number } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/email-campaigns/preview`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getEmailCampaignErrorMessage(json, `Preview failed: ${response.statusText}`)
+      );
+    }
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getEmailCampaigns = async (
+  params: { search?: string; status?: string; page?: number; per_page?: number } = {}
+): Promise<EmailCampaignsResponse | null> => {
+  try {
+    const query = new URLSearchParams();
+    if (params.search) query.set("search", params.search);
+    if (params.status) query.set("status", params.status);
+    if (params.page) query.set("page", String(params.page));
+    if (params.per_page) query.set("per_page", String(params.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/email-campaigns${query.toString() ? `?${query}` : ""}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getEmailCampaignErrorMessage(json, `Failed to fetch email campaigns: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const createEmailCampaign = async (
+  payload: EmailCampaignPayload
+): Promise<EmailCampaign | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/email-campaigns`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getEmailCampaignErrorMessage(json, `Failed to create email campaign: ${response.statusText}`)
+      );
+    }
+    toast.success(json.message ?? "Email campaign saved");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getEmailCampaign = async (
+  id: number
+): Promise<{ success: boolean; data: EmailCampaign } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/email-campaigns/${id}`);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getEmailCampaignErrorMessage(json, `Failed to fetch email campaign: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const deleteEmailCampaign = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/email-campaigns/${id}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getEmailCampaignErrorMessage(json, `Failed to delete email campaign: ${response.statusText}`)
+      );
+    }
+    toast.success("Email campaign deleted");
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
+export const sendEmailCampaign = async (
+  id: number
+): Promise<{ queued_count?: number; recipient_count?: number } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/email-campaigns/${id}/send`, {
+      method: "POST",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getEmailCampaignErrorMessage(json, `Failed to queue email campaign: ${response.statusText}`)
+      );
+    }
+    const count = json.data?.queued_count ?? json.data?.recipient_count ?? 0;
+    toast.success(`Queued ${count} email(s)`);
     return json.data ?? null;
   } catch (error) {
     handleError(error);
@@ -919,6 +2750,26 @@ export const updateProcessingFeeSettings = async (
     treasury_wallet_address: string;
     delivery_fee_jumia_ngn: number;
     delivery_fee_crossmint_usd: number;
+    jupiter_referral_account: string;
+    jupiter_referral_fee_bps: number;
+    pajcash_onramp_usdc_fee: number;
+    pajcash_offramp_usdc_fee: number;
+    bug_report_email: string;
+    support_inbox_email: string;
+    admin_notification_email: string;
+    hey_points_enabled?: '0' | '1';
+    airtime_cashback_enabled?: '0' | '1';
+    airtime_cashback_percent?: number;
+    airtime_cashback_min_purchase_ngn?: number;
+    airtime_cashback_max_points_per_txn?: number;
+    points_redeem_airtime_enabled?: '0' | '1';
+    points_redeem_gas_enabled?: '0' | '1';
+    points_max_redeem_percent_airtime?: number;
+    points_lamports_per_point?: number;
+    hey_points_treasury_enabled?: '0' | '1';
+    email_twitter_url?: string;
+    email_telegram_url?: string;
+    email_community_url?: string;
   }>
 ): Promise<ProcessingFeeSettings | null> => {
   try {
@@ -935,3 +2786,700 @@ export const updateProcessingFeeSettings = async (
     return null;
   }
 };
+
+// ============ Bug Reports / Logs (Admin) ============
+
+export type BugReportSeverity = 'critical' | 'warning' | 'info';
+export type BugReportStatus = 'new' | 'pending' | 'fixed';
+export type BugReportType = 'bug' | 'log';
+
+export interface BugReportUser {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface BugReport {
+  id: number;
+  user_id: number | null;
+  wallet_address: string | null;
+  type: BugReportType;
+  severity: BugReportSeverity;
+  status: BugReportStatus;
+  title: string;
+  summary: string | null;
+  details: string | null;
+  stack_trace: string | null;
+  source: string | null;
+  app_version: string | null;
+  platform: string | null;
+  device_info: string | null;
+  metadata: Record<string, unknown> | null;
+  resolved_at: string | null;
+  resolved_by: number | null;
+  resolver: BugReportUser | null;
+  user: BugReportUser | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BugReportsFilters {
+  status?: string;
+  severity?: string;
+  type?: string;
+  source?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export interface BugReportsResponse {
+  success: boolean;
+  data: BugReport[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+export interface BugReportStats {
+  new: number;
+  pending: number;
+  fixed: number;
+  total: number;
+  open_critical: number;
+  open_warning: number;
+}
+
+export const getBugReports = async (
+  filters: BugReportsFilters = {}
+): Promise<BugReportsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.status) params.set('status', filters.status);
+    if (filters.severity) params.set('severity', filters.severity);
+    if (filters.type) params.set('type', filters.type);
+    if (filters.source) params.set('source', filters.source);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.per_page) params.set('per_page', String(filters.per_page));
+    const url = `${API_BASE_URL}/admin/bug-reports${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await authenticatedFetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch bug reports: ${response.statusText}`);
+    return await response.json();
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getBugReportStats = async (): Promise<BugReportStats | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/bug-reports/stats`);
+    if (!response.ok) throw new Error(`Failed to fetch bug report stats: ${response.statusText}`);
+    const json = await response.json();
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getBugReport = async (
+  id: number
+): Promise<{ success: boolean; data: BugReport } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/bug-reports/${id}`);
+    if (!response.ok) throw new Error(`Failed to fetch bug report: ${response.statusText}`);
+    return await response.json();
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const updateBugReportStatus = async (
+  id: number,
+  status: BugReportStatus
+): Promise<{ success: boolean; data: BugReport } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/bug-reports/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.message || `Failed to update status: ${response.statusText}`);
+    toast.success('Status updated');
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const deleteBugReport = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/bug-reports/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error(`Failed to delete report: ${response.statusText}`);
+    toast.success('Report deleted');
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
+export const bulkDeleteBugReports = async (ids: number[]): Promise<number> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/bug-reports/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.message || `Failed to delete reports: ${response.statusText}`);
+    toast.success(json.message || 'Reports deleted');
+    return json.deleted_count ?? ids.length;
+  } catch (error) {
+    handleError(error);
+    return 0;
+  }
+};
+
+export const clearBugReports = async (scope: 'fixed' | 'all'): Promise<number> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/bug-reports/clear`, {
+      method: 'POST',
+      body: JSON.stringify({ scope }),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.message || `Failed to clear reports: ${response.statusText}`);
+    toast.success(json.message || 'Reports cleared');
+    return json.deleted_count ?? 0;
+  } catch (error) {
+    handleError(error);
+    return 0;
+  }
+};
+
+// ---- Support chat ----
+
+export type SupportConversationStatus = 'open' | 'resolved' | 'closed';
+
+export interface SupportConversation {
+  id: number;
+  addressbook_user_id?: number | null;
+  phone_number?: string | null;
+  wallet_address?: string | null;
+  username?: string | null;
+  status: SupportConversationStatus;
+  last_message_preview?: string | null;
+  last_message_at?: string | null;
+  unread_admin_count: number;
+  unread_user_count: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SupportMessage {
+  id: number;
+  conversation_id: number;
+  sender_type: 'user' | 'admin';
+  sender_admin_id?: number | null;
+  body: string;
+  attachment_url?: string | null;
+  attachment_mime?: string | null;
+  attachment_original_name?: string | null;
+  has_attachment?: boolean;
+  read_at?: string | null;
+  created_at?: string;
+  admin?: { id: number; name: string } | null;
+}
+
+export interface SupportConversationsResponse {
+  data: SupportConversation[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    unread_total: number;
+  };
+}
+
+export interface SupportConversationDetail {
+  conversation: SupportConversation;
+  messages: SupportMessage[];
+  message?: SupportMessage;
+}
+
+export interface AddressbookUserSearchResult {
+  id: number;
+  username?: string | null;
+  phone_number?: string | null;
+  wallet_address?: string | null;
+}
+
+export const getSupportConversations = async (filters: {
+  status?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+} = {}): Promise<SupportConversationsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.status) params.set('status', filters.status);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.per_page) params.set('per_page', String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/support/conversations?${params.toString()}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.message || 'Failed to load support conversations');
+    return json as SupportConversationsResponse;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+function normalizeSupportMessages(raw: unknown): SupportMessage[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') {
+    return Object.values(raw as Record<string, SupportMessage>);
+  }
+  return [];
+}
+
+export const getSupportConversation = async (
+  id: number
+): Promise<SupportConversationDetail> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/support/conversations/${id}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(json.message || 'Failed to load conversation');
+    }
+    const data = json.data as SupportConversationDetail;
+    return {
+      ...data,
+      messages: normalizeSupportMessages(data?.messages),
+    };
+  } catch (error) {
+    handleError(error);
+    throw error;
+  }
+};
+
+export const sendSupportAdminMessage = async (
+  conversationId: number,
+  body: string,
+  attachment?: File | null
+): Promise<SupportConversationDetail | null> => {
+  try {
+    let response: Response;
+    const trimmed = body.trim();
+
+    if (attachment) {
+      const form = new FormData();
+      if (trimmed) form.append('body', trimmed);
+      form.append('attachment', attachment);
+      response = await authenticatedFetch(
+        `${API_BASE_URL}/admin/support/conversations/${conversationId}/messages`,
+        { method: 'POST', body: form }
+      );
+    } else {
+      response = await authenticatedFetch(
+        `${API_BASE_URL}/admin/support/conversations/${conversationId}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ body: trimmed }),
+        }
+      );
+    }
+
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.message || 'Failed to send message');
+    toast.success('Message sent');
+    const payload = json.data as SupportConversationDetail;
+    return {
+      conversation: payload.conversation,
+      messages: payload.message ? [payload.message] : [],
+      message: payload.message,
+    };
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const startSupportConversation = async (payload: {
+  body: string;
+  phone_number?: string;
+  wallet_address?: string;
+  user_id?: number;
+  username?: string;
+}): Promise<SupportConversationDetail | null> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/support/conversations/start`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.message || 'Failed to start conversation');
+    toast.success('Conversation started');
+    return json.data as SupportConversationDetail;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const updateSupportConversationStatus = async (
+  conversationId: number,
+  status: SupportConversationStatus
+): Promise<SupportConversation | null> => {
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/support/conversations/${conversationId}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.message || 'Failed to update status');
+    toast.success(`Marked as ${status}`);
+    return json.data as SupportConversation;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const searchSupportUsers = async (
+  search: string
+): Promise<AddressbookUserSearchResult[]> => {
+  try {
+    const params = new URLSearchParams({ search });
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/support/conversations/search-users?${params.toString()}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.message || 'Search failed');
+    return (json.data ?? []) as AddressbookUserSearchResult[];
+  } catch (error) {
+    handleError(error);
+    return [];
+  }
+};
+
+// ============ App Registrations (Admin) ============
+
+export type AppRegistrationStatus = "draft" | "published" | "disabled";
+export type AppVisibility = "public" | "beta";
+
+export interface AppToolParamOption {
+  value: string;
+  name: string;
+}
+
+export interface AppToolParam {
+  name: string;
+  type: string;
+  label?: string;
+  placeholder?: string;
+  helper?: string;
+  optional?: boolean;
+  secure?: boolean;
+  multiline?: boolean;
+  options?: AppToolParamOption[];
+}
+
+export interface AppToolAction {
+  type?: string;
+  route?: string;
+  action_id?: string;
+  params?: AppToolParam[];
+}
+
+export interface AppToolDefinition {
+  name: string;
+  params?: AppToolParam[];
+  action?: AppToolAction | null;
+}
+
+export interface AppRegistration {
+  id: number;
+  slug: string;
+  name: string;
+  category: string;
+  short_description: string | null;
+  description: string | null;
+  website_url: string | null;
+  tutorial_url: string | null;
+  dashboard_route: string | null;
+  icon_url: string | null;
+  banner_url: string | null;
+  icon_path?: string | null;
+  banner_path?: string | null;
+  tags: string[];
+  description_images: string[];
+  brand_colors: { primary?: string; secondary?: string } | null;
+  tools: AppToolDefinition[];
+  capability_ids: string[];
+  status: AppRegistrationStatus;
+  visibility?: AppVisibility;
+  beta_allowlist?: string[];
+  is_featured: boolean;
+  is_new: boolean;
+  sort_order: number;
+  ratings: number;
+  user_count: number;
+  review_count: number;
+  minimum_client_version: string | null;
+  platforms: string[];
+  published_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AppRegistrationPayload {
+  slug?: string;
+  name: string;
+  category: string;
+  short_description?: string | null;
+  description?: string | null;
+  website_url?: string | null;
+  tutorial_url?: string | null;
+  dashboard_route?: string | null;
+  icon_url?: string | null;
+  banner_url?: string | null;
+  tags?: string[];
+  description_images?: string[];
+  brand_colors?: { primary?: string; secondary?: string } | null;
+  tools?: AppToolDefinition[];
+  capability_ids?: string[];
+  status?: AppRegistrationStatus;
+  visibility?: AppVisibility;
+  beta_allowlist?: string[];
+  is_featured?: boolean;
+  is_new?: boolean;
+  sort_order?: number;
+  ratings?: number;
+  minimum_client_version?: string | null;
+  platforms?: string[];
+}
+
+export interface AppRegistrationsResponse {
+  success: boolean;
+  data: AppRegistration[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+const getAppRegistrationErrorMessage = (
+  json: { message?: string; errors?: Record<string, string[]> },
+  fallback: string
+) => {
+  const firstValidationError = json.errors
+    ? Object.values(json.errors).flat().find(Boolean)
+    : null;
+  return firstValidationError || json.message || fallback;
+};
+
+export const getAppRegistrations = async (
+  filters: {
+    search?: string;
+    status?: AppRegistrationStatus;
+    category?: string;
+    page?: number;
+    per_page?: number;
+  } = {}
+): Promise<AppRegistrationsResponse | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/admin/apps${params.toString() ? `?${params.toString()}` : ""}`
+    );
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to fetch apps: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const createAppRegistration = async (
+  payload: AppRegistrationPayload
+): Promise<AppRegistration | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/apps`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to create app: ${response.statusText}`)
+      );
+    }
+    toast.success("App registration created");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const getAppRegistration = async (
+  id: number
+): Promise<{ success: boolean; data: AppRegistration } | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/apps/${id}`);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to fetch app: ${response.statusText}`)
+      );
+    }
+    return json;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const updateAppRegistration = async (
+  id: number,
+  payload: AppRegistrationPayload
+): Promise<AppRegistration | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/apps/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to update app: ${response.statusText}`)
+      );
+    }
+    toast.success("App registration updated");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const deleteAppRegistration = async (id: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/apps/${id}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to delete app: ${response.statusText}`)
+      );
+    }
+    toast.success("App registration deleted");
+    return true;
+  } catch (error) {
+    handleError(error);
+    return false;
+  }
+};
+
+export const publishAppRegistration = async (id: number): Promise<AppRegistration | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/apps/${id}/publish`, {
+      method: "POST",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to publish app: ${response.statusText}`)
+      );
+    }
+    toast.success("App published");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const disableAppRegistration = async (id: number): Promise<AppRegistration | null> => {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/apps/${id}/disable`, {
+      method: "POST",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to disable app: ${response.statusText}`)
+      );
+    }
+    toast.success("App disabled");
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
+export const uploadAppRegistrationAsset = async (
+  id: number,
+  kind: "icon" | "banner",
+  file: File
+): Promise<AppRegistration | null> => {
+  try {
+    const formData = new FormData();
+    formData.append("kind", kind);
+    formData.append("file", file);
+
+    const response = await authenticatedFetch(`${API_BASE_URL}/admin/apps/${id}/assets`, {
+      method: "POST",
+      body: formData,
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        getAppRegistrationErrorMessage(json, `Failed to upload ${kind}: ${response.statusText}`)
+      );
+    }
+    toast.success(`${kind === "icon" ? "Icon" : "Banner"} uploaded`);
+    return json.data ?? null;
+  } catch (error) {
+    handleError(error);
+    return null;
+  }
+};
+
