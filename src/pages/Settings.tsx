@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save, Percent, Wallet, Truck } from 'lucide-react';
+import { Save, Percent, Wallet, Truck, ArrowLeftRight, Gift, Landmark, Bell, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import {
   getProcessingFeeSettings,
@@ -20,7 +21,23 @@ const Settings = () => {
   const [treasury, setTreasury] = useState('');
   const [deliveryFeeJumiaNgn, setDeliveryFeeJumiaNgn] = useState('');
   const [deliveryFeeCrossmintUsd, setDeliveryFeeCrossmintUsd] = useState('');
+  const [jupiterReferralAccount, setJupiterReferralAccount] = useState('');
+  const [jupiterReferralFeeBps, setJupiterReferralFeeBps] = useState('');
+  const [pajcashOnrampUsdcFee, setPajcashOnrampUsdcFee] = useState('');
+  const [pajcashOfframpUsdcFee, setPajcashOfframpUsdcFee] = useState('');
+  const [heyPointsEnabled, setHeyPointsEnabled] = useState(true);
+  const [cashbackPercent, setCashbackPercent] = useState('');
+  const [cashbackMinNgn, setCashbackMinNgn] = useState('');
+  const [cashbackMaxPoints, setCashbackMaxPoints] = useState('');
+  const [heyPointsTreasuryEnabled, setHeyPointsTreasuryEnabled] = useState(true);
+  const [adminNotificationEmail, setAdminNotificationEmail] = useState('');
+  const [emailTwitterUrl, setEmailTwitterUrl] = useState('');
+  const [emailTelegramUrl, setEmailTelegramUrl] = useState('');
+  const [emailCommunityUrl, setEmailCommunityUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingHeyPoints, setSavingHeyPoints] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [savingEmailSocial, setSavingEmailSocial] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['processing-fee-settings'],
@@ -35,8 +52,45 @@ const Settings = () => {
       setTreasury(settings.treasury_wallet_address ?? '');
       setDeliveryFeeJumiaNgn(settings.delivery_fee_jumia_ngn ?? '');
       setDeliveryFeeCrossmintUsd(settings.delivery_fee_crossmint_usd ?? '');
+      setJupiterReferralAccount(settings.jupiter_referral_account ?? '');
+      setJupiterReferralFeeBps(settings.jupiter_referral_fee_bps ?? '');
+      setPajcashOnrampUsdcFee(settings.pajcash_onramp_usdc_fee ?? '');
+      setPajcashOfframpUsdcFee(settings.pajcash_offramp_usdc_fee ?? '');
+      setHeyPointsEnabled((settings.hey_points_enabled ?? '1') === '1');
+      setCashbackPercent(settings.airtime_cashback_percent ?? '');
+      setCashbackMinNgn(settings.airtime_cashback_min_purchase_ngn ?? '');
+      setCashbackMaxPoints(settings.airtime_cashback_max_points_per_txn ?? '');
+      setHeyPointsTreasuryEnabled((settings.hey_points_treasury_enabled ?? '1') === '1');
+      setAdminNotificationEmail(settings.admin_notification_email ?? '');
+      setEmailTwitterUrl(settings.email_twitter_url ?? '');
+      setEmailTelegramUrl(settings.email_telegram_url ?? '');
+      setEmailCommunityUrl(settings.email_community_url ?? '');
     }
   }, [settings]);
+
+  const handleSaveNotifications = async () => {
+    setSavingNotifications(true);
+    const result = await updateProcessingFeeSettings({
+      admin_notification_email: adminNotificationEmail.trim(),
+    });
+    setSavingNotifications(false);
+    if (result) {
+      queryClient.setQueryData(['processing-fee-settings'], result);
+    }
+  };
+
+  const handleSaveEmailSocial = async () => {
+    setSavingEmailSocial(true);
+    const result = await updateProcessingFeeSettings({
+      email_twitter_url: emailTwitterUrl.trim(),
+      email_telegram_url: emailTelegramUrl.trim(),
+      email_community_url: emailCommunityUrl.trim(),
+    });
+    setSavingEmailSocial(false);
+    if (result) {
+      queryClient.setQueryData(['processing-fee-settings'], result);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -47,8 +101,60 @@ const Settings = () => {
       treasury_wallet_address: treasury.trim() === '' ? undefined : treasury.trim(),
       delivery_fee_jumia_ngn: deliveryFeeJumiaNgn === '' ? undefined : Number(deliveryFeeJumiaNgn),
       delivery_fee_crossmint_usd: deliveryFeeCrossmintUsd === '' ? undefined : Number(deliveryFeeCrossmintUsd),
+      jupiter_referral_account: jupiterReferralAccount.trim() === '' ? undefined : jupiterReferralAccount.trim(),
+      jupiter_referral_fee_bps: jupiterReferralFeeBps === '' ? undefined : Number(jupiterReferralFeeBps),
+      pajcash_onramp_usdc_fee: pajcashOnrampUsdcFee === '' ? undefined : Number(pajcashOnrampUsdcFee),
+      pajcash_offramp_usdc_fee: pajcashOfframpUsdcFee === '' ? undefined : Number(pajcashOfframpUsdcFee),
     });
     setSaving(false);
+    if (result) {
+      queryClient.setQueryData(['processing-fee-settings'], result);
+    }
+  };
+
+  const handleHeyPointsToggle = async (enabled: boolean) => {
+    setHeyPointsEnabled(enabled);
+    setSavingHeyPoints(true);
+    const result = await updateProcessingFeeSettings({
+      hey_points_enabled: enabled ? '1' : '0',
+      airtime_cashback_enabled: enabled ? '1' : '0',
+    });
+    setSavingHeyPoints(false);
+    if (result) {
+      queryClient.setQueryData(['processing-fee-settings'], result);
+    } else {
+      setHeyPointsEnabled(!enabled);
+    }
+  };
+
+  const handleHeyPointsTreasuryToggle = async (enabled: boolean) => {
+    setHeyPointsTreasuryEnabled(enabled);
+    setSavingHeyPoints(true);
+    const result = await updateProcessingFeeSettings({
+      hey_points_treasury_enabled: enabled ? '1' : '0',
+    });
+    setSavingHeyPoints(false);
+    if (result) {
+      queryClient.setQueryData(['processing-fee-settings'], result);
+    } else {
+      setHeyPointsTreasuryEnabled(!enabled);
+    }
+  };
+
+  const handleSaveHeyPoints = async () => {
+    setSavingHeyPoints(true);
+    const result = await updateProcessingFeeSettings({
+      hey_points_enabled: heyPointsEnabled ? '1' : '0',
+      airtime_cashback_enabled: heyPointsEnabled ? '1' : '0',
+      airtime_cashback_percent:
+        cashbackPercent === '' ? undefined : Number(cashbackPercent),
+      airtime_cashback_min_purchase_ngn:
+        cashbackMinNgn === '' ? undefined : Number(cashbackMinNgn),
+      airtime_cashback_max_points_per_txn:
+        cashbackMaxPoints === '' ? undefined : Number(cashbackMaxPoints),
+      hey_points_treasury_enabled: heyPointsTreasuryEnabled ? '1' : '0',
+    });
+    setSavingHeyPoints(false);
     if (result) {
       queryClient.setQueryData(['processing-fee-settings'], result);
     }
@@ -67,11 +173,223 @@ const Settings = () => {
         <Card className="bg-black/30 border-white/10">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Admin notifications
+            </CardTitle>
+            <CardDescription>
+              Email address for alerts when new users register, transactions are recorded, or support messages arrive. Also shown in the dashboard notification bell.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-10 w-full max-w-md" />
+            ) : (
+              <div className="space-y-4 max-w-md">
+                <div className="space-y-2">
+                  <Label htmlFor="admin-notification-email">Notification email</Label>
+                  <Input
+                    id="admin-notification-email"
+                    type="email"
+                    placeholder="admin@example.com"
+                    value={adminNotificationEmail}
+                    onChange={(e) => setAdminNotificationEmail(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Falls back to support inbox or bug report email if left empty.
+                  </p>
+                </div>
+                <Button onClick={handleSaveNotifications} disabled={savingNotifications} className="w-fit">
+                  <Save className="mr-2 h-4 w-4" />
+                  {savingNotifications ? 'Saving...' : 'Save notification email'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black/30 border-white/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              Email & community links
+            </CardTitle>
+            <CardDescription>
+              Social and community URLs shown in welcome emails and other user-facing messages.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-4 max-w-md">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-4 max-w-md">
+                <div className="space-y-2">
+                  <Label htmlFor="email-twitter-url">Twitter / X URL</Label>
+                  <Input
+                    id="email-twitter-url"
+                    type="url"
+                    placeholder="https://x.com/useOrova"
+                    value={emailTwitterUrl}
+                    onChange={(e) => setEmailTwitterUrl(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email-telegram-url">Telegram URL</Label>
+                  <Input
+                    id="email-telegram-url"
+                    type="url"
+                    placeholder="https://t.me/..."
+                    value={emailTelegramUrl}
+                    onChange={(e) => setEmailTelegramUrl(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email-community-url">Community URL</Label>
+                  <Input
+                    id="email-community-url"
+                    type="url"
+                    placeholder="https://discord.com/invite/..."
+                    value={emailCommunityUrl}
+                    onChange={(e) => setEmailCommunityUrl(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used for the &quot;Join the Community&quot; button in welcome emails.
+                  </p>
+                </div>
+                <Button onClick={handleSaveEmailSocial} disabled={savingEmailSocial} className="w-fit">
+                  <Save className="mr-2 h-4 w-4" />
+                  {savingEmailSocial ? 'Saving...' : 'Save email links'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black/30 border-white/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gift className="h-5 w-5" />
+              Hey Points cashback
+            </CardTitle>
+            <CardDescription>
+              Reward users with Hey Points on airtime and data purchases. Points can be redeemed for airtime or gas fees in the wallet app. Turn off to disable earning and redemption app-wide.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-10 w-full max-w-md" />
+              </div>
+            ) : (
+              <div className="grid gap-6 max-w-md">
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="hey-points-enabled">Enable Hey Points</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {heyPointsEnabled
+                        ? 'Users earn and redeem points on airtime & data.'
+                        : 'Cashback is off — wallet hides points features.'}
+                    </p>
+                  </div>
+                  <Switch
+                    id="hey-points-enabled"
+                    checked={heyPointsEnabled}
+                    disabled={savingHeyPoints}
+                    onCheckedChange={handleHeyPointsToggle}
+                  />
+                </div>
+
+                {heyPointsEnabled && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="cashback-percent">Cashback percent (%)</Label>
+                      <Input
+                        id="cashback-percent"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        placeholder="10"
+                        value={cashbackPercent}
+                        onChange={(e) => setCashbackPercent(e.target.value)}
+                        className="bg-white/5 border-white/10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cashback-min">Minimum purchase (NGN) to earn</Label>
+                      <Input
+                        id="cashback-min"
+                        type="number"
+                        min={0}
+                        step={1}
+                        placeholder="50"
+                        value={cashbackMinNgn}
+                        onChange={(e) => setCashbackMinNgn(e.target.value)}
+                        className="bg-white/5 border-white/10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cashback-max">Max points earned per purchase</Label>
+                      <Input
+                        id="cashback-max"
+                        type="number"
+                        min={0}
+                        step={1}
+                        placeholder="500"
+                        value={cashbackMaxPoints}
+                        onChange={(e) => setCashbackMaxPoints(e.target.value)}
+                        className="bg-white/5 border-white/10"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="hey-points-treasury">Treasury airtime checkout</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {heyPointsTreasuryEnabled
+                            ? 'Points cover full face-value airtime. Backend signs Airbills txs with the treasury wallet (requires TREASURY_SECRET_KEY on server).'
+                            : 'Off — points only reduce the NGN sent to Airbills (user gets less airtime).'}
+                        </p>
+                      </div>
+                      <Switch
+                        id="hey-points-treasury"
+                        checked={heyPointsTreasuryEnabled}
+                        disabled={savingHeyPoints}
+                        onCheckedChange={handleHeyPointsTreasuryToggle}
+                      />
+                    </div>
+
+                    <Button
+                      onClick={handleSaveHeyPoints}
+                      disabled={savingHeyPoints}
+                      className="w-fit"
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      {savingHeyPoints ? 'Saving...' : 'Save Hey Points settings'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black/30 border-white/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5" />
               Treasury wallet
             </CardTitle>
             <CardDescription>
-              Solana wallet address that receives all fee and payment flows (USDC for Jumia orders, etc.). The wallet app fetches this to send payments.
+              Solana wallet address that receives fee and payment flows (USDC for Jumia orders, etc.). For Hey Points airtime checkout, set TREASURY_SECRET_KEY in server env to the base58 secret for this address.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -142,6 +460,122 @@ const Settings = () => {
                     onChange={(e) => setDeliveryFeeCrossmintUsd(e.target.value)}
                     className="bg-white/5 border-white/10"
                   />
+                </div>
+                <Button onClick={handleSave} disabled={saving} className="w-fit">
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? 'Saving...' : 'Save all settings'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black/30 border-white/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ArrowLeftRight className="h-5 w-5" />
+              Swap fee (Jupiter)
+            </CardTitle>
+            <CardDescription>
+              Hey Solana fee on in-app token swaps via Jupiter Referral Program. Set your Jupiter referral account pubkey and fee in basis points (50–255 = 0.5%–2.55%). Use 0 to disable. The wallet app reads these values from the public settings API.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="grid gap-6 max-w-md">
+                <div className="space-y-2">
+                  <Label htmlFor="jupiter-referral-account">Jupiter referral account</Label>
+                  <Input
+                    id="jupiter-referral-account"
+                    type="text"
+                    placeholder="Referral account pubkey from referral.jup.ag"
+                    value={jupiterReferralAccount}
+                    onChange={(e) => setJupiterReferralAccount(e.target.value)}
+                    className="bg-white/5 border-white/10 font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="jupiter-referral-fee-bps">Swap fee (basis points)</Label>
+                  <Input
+                    id="jupiter-referral-fee-bps"
+                    type="number"
+                    min={0}
+                    max={255}
+                    step={1}
+                    placeholder="50"
+                    value={jupiterReferralFeeBps}
+                    onChange={(e) => setJupiterReferralFeeBps(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    50 bps = 0.5%. Jupiter minimum when enabled is 50 bps. Set to 0 to turn off integrator fee.
+                  </p>
+                </div>
+                <Button onClick={handleSave} disabled={saving} className="w-fit">
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? 'Saving...' : 'Save all settings'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black/30 border-white/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Landmark className="h-5 w-5" />
+              PajCash onramp / offramp fee
+            </CardTitle>
+            <CardDescription>
+              Hey Solana integrator fee on PajCash fiat ramps, denominated in USDC. The wallet sends this as{' '}
+              <code className="text-xs">businessUSDCFee</code> when creating onramp and offramp orders. Set to 0 to
+              disable. Users see the fee in the wallet before confirming.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="grid gap-6 max-w-md">
+                <div className="space-y-2">
+                  <Label htmlFor="pajcash-onramp-fee">Onramp fee (USDC)</Label>
+                  <Input
+                    id="pajcash-onramp-fee"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0"
+                    value={pajcashOnrampUsdcFee}
+                    onChange={(e) => setPajcashOnrampUsdcFee(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Applied when users buy crypto with NGN via PajCash.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pajcash-offramp-fee">Offramp fee (USDC)</Label>
+                  <Input
+                    id="pajcash-offramp-fee"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0"
+                    value={pajcashOfframpUsdcFee}
+                    onChange={(e) => setPajcashOfframpUsdcFee(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Applied when users sell crypto for NGN via PajCash.
+                  </p>
                 </div>
                 <Button onClick={handleSave} disabled={saving} className="w-fit">
                   <Save className="mr-2 h-4 w-4" />
