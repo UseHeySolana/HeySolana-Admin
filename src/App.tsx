@@ -4,18 +4,40 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./components/AuthContext";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
 import UserDistribution from "./pages/UserDistribution";
 import Users from "./pages/Users";
-import WaitlistPage from "./pages/WaitlistPage";
+import UserDetail from "./pages/UserDetail";
 import ProfilePage from "./pages/ProfilePage";
 import Orders from "./pages/Orders";
+import Transactions from "./pages/Transactions";
+import TransactionList from "./pages/TransactionList";
+import TransactionDetail from "./pages/TransactionDetail";
 import JumiaOrderDetail from "./pages/JumiaOrderDetail";
 import CrossmintOrderDetail from "./pages/CrossmintOrderDetail";
+import ChowdeckOrderDetail from "./pages/ChowdeckOrderDetail";
 import Settings from "./pages/Settings";
 import Admins from "./pages/Admins";
+import PushNotifications from "./pages/PushNotifications";
+import PushQueue from "./pages/PushQueue";
+import PushCampaignDetail from "./pages/PushCampaignDetail";
+import ScheduledPushes from "./pages/ScheduledPushes";
+import ScheduledPushDetail from "./pages/ScheduledPushDetail";
+import NotificationNudges from "./pages/NotificationNudges";
+import NotificationNudgeDetail from "./pages/NotificationNudgeDetail";
+import Apps from "./pages/Apps";
+import AppDetail from "./pages/AppDetail";
+import WhatsAppMessaging from "./pages/WhatsAppMessaging";
+import WhatsAppCampaignDetail from "./pages/WhatsAppCampaignDetail";
+import EmailMessaging from "./pages/EmailMessaging";
+import EmailCampaignDetail from "./pages/EmailCampaignDetail";
+import BugReports from "./pages/BugReports";
+import BugReportDetail from "./pages/BugReportDetail";
+import SupportInbox from "./pages/SupportInbox";
+import SupportConversationDetail from "./pages/SupportConversationDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -108,10 +130,10 @@ const AppRoutes = () => {
       />
 
       <Route
-        path="/waitlist"
+        path="/users/:id"
         element={
           <ProtectedRoute>
-            <WaitlistPage />
+            <UserDetail />
           </ProtectedRoute>
         }
       />
@@ -121,6 +143,33 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Orders />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/transactions"
+        element={
+          <ProtectedRoute>
+            <Transactions />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/transaction-list"
+        element={
+          <ProtectedRoute>
+            <TransactionList />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/transaction-list/:id"
+        element={
+          <ProtectedRoute>
+            <TransactionDetail />
           </ProtectedRoute>
         }
       />
@@ -144,6 +193,15 @@ const AppRoutes = () => {
       />
 
       <Route
+        path="/orders/chowdeck/:orderId"
+        element={
+          <ProtectedRoute>
+            <ChowdeckOrderDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/settings"
         element={
           <ProtectedRoute>
@@ -157,6 +215,159 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Admins />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/push-notifications"
+        element={
+          <ProtectedRoute>
+            <PushNotifications />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/push-queue"
+        element={
+          <ProtectedRoute>
+            <PushQueue />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/push-notifications/:id"
+        element={
+          <ProtectedRoute>
+            <PushCampaignDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/scheduled-pushes"
+        element={
+          <ProtectedRoute>
+            <ScheduledPushes />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/scheduled-pushes/:id"
+        element={
+          <ProtectedRoute>
+            <ScheduledPushDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/notification-nudges"
+        element={
+          <ProtectedRoute>
+            <NotificationNudges />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/notification-nudges/:id"
+        element={
+          <ProtectedRoute>
+            <NotificationNudgeDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/apps"
+        element={
+          <ProtectedRoute>
+            <Apps />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/apps/:id"
+        element={
+          <ProtectedRoute>
+            <AppDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/whatsapp-messaging"
+        element={
+          <ProtectedRoute>
+            <WhatsAppMessaging />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/whatsapp-messaging/:id"
+        element={
+          <ProtectedRoute>
+            <WhatsAppCampaignDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/email-messaging"
+        element={
+          <ProtectedRoute>
+            <EmailMessaging />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/email-messaging/:id"
+        element={
+          <ProtectedRoute>
+            <EmailCampaignDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/bug-reports"
+        element={
+          <ProtectedRoute>
+            <BugReports />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/bug-reports/:id"
+        element={
+          <ProtectedRoute>
+            <BugReportDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/support"
+        element={
+          <ProtectedRoute>
+            <SupportInbox />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/support/:id"
+        element={
+          <ProtectedRoute>
+            <SupportConversationDetail />
           </ProtectedRoute>
         }
       />
@@ -182,7 +393,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <ConfirmProvider>
+            <AppRoutes />
+          </ConfirmProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

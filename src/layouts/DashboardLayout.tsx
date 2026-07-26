@@ -1,14 +1,22 @@
 
 import React, { useState } from 'react';
 import {
+  AppWindow,
   BarChart3,
   Bell,
+  Bug,
+  CalendarClock,
   ChevronFirst,
   ChevronLast,
-  ClipboardList,
+  Headphones,
+  ListOrdered,
   LogOut,
   Menu,
+  MessageCircle,
+  Mail,
+  Megaphone,
   Package,
+  ReceiptText,
   Settings,
   ShieldCheck,
   User,
@@ -31,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Logo from "../../public/logo.png";
+import AdminNotificationBell from "@/components/AdminNotificationBell";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -73,14 +82,64 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       path: "/users",
     },
     {
-      name: "Waitlist",
-      icon: <ClipboardList className="h-5 w-5" />,
-      path: "/waitlist",
+      name: "Push notifications",
+      icon: <Bell className="h-5 w-5" />,
+      path: "/push-notifications",
+    },
+    {
+      name: "Push queue",
+      icon: <ListOrdered className="h-5 w-5" />,
+      path: "/push-queue",
+    },
+    {
+      name: "Scheduled pushes",
+      icon: <CalendarClock className="h-5 w-5" />,
+      path: "/scheduled-pushes",
+    },
+    {
+      name: "Notification nudges",
+      icon: <Megaphone className="h-5 w-5" />,
+      path: "/notification-nudges",
+    },
+    {
+      name: "Apps",
+      icon: <AppWindow className="h-5 w-5" />,
+      path: "/apps",
+    },
+    {
+      name: "WhatsApp messaging",
+      icon: <MessageCircle className="h-5 w-5" />,
+      path: "/whatsapp-messaging",
+    },
+    {
+      name: "Email messaging",
+      icon: <Mail className="h-5 w-5" />,
+      path: "/email-messaging",
+    },
+    {
+      name: "Support inbox",
+      icon: <Headphones className="h-5 w-5" />,
+      path: "/support",
     },
     {
       name: "Orders",
       icon: <Package className="h-5 w-5" />,
       path: "/orders",
+    },
+    {
+      name: "Transaction Analysis",
+      icon: <TrendingUp className="h-5 w-5" />,
+      path: "/transactions",
+    },
+    {
+      name: "Transaction List",
+      icon: <ReceiptText className="h-5 w-5" />,
+      path: "/transaction-list",
+    },
+    {
+      name: "Bugs & Logs",
+      icon: <Bug className="h-5 w-5" />,
+      path: "/bug-reports",
     },
     {
       name: "Settings",
@@ -107,7 +166,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   return (
     <div className="flex min-h-screen bg-background bg-noise">
@@ -317,10 +377,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             <div className="hidden md:flex"></div>
 
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="icon" className="h-8 w-8 relative">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1 right-1 h-2 w-2 bg-solana rounded-full"></span>
-              </Button>
+              <AdminNotificationBell />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
