@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Search, 
@@ -15,31 +16,43 @@ import {
   Trash2,
   Eye,
   Copy,
-  Check
+  Check,
+  Bell,
+  Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import DashboardLayout from '@/layouts/DashboardLayout';
-import { getUsers, User, UsersResponse, UsersFilters } from '@/services/api';
+import { useConfirm } from '@/components/ConfirmDialog';
+import { getUsers, User, UsersResponse, UsersFilters, sendAdminPush } from '@/services/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const Users = () => {
+  const navigate = useNavigate();
+  const confirm = useConfirm();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [walletFilter, setWalletFilter] = useState<string>('all');
+  const [inactiveFilter, setInactiveFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [itemsPerPage] = useState(10);
   const [copiedWallet, setCopiedWallet] = useState<string | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [notificationTitle, setNotificationTitle] = useState('We miss you on HeySolana');
+  const [notificationBody, setNotificationBody] = useState('Open the app to check your wallet, swaps, and latest HeySolana updates.');
+  const [sendingNotification, setSendingNotification] = useState(false);
 
   // API call to fetch users from backend
   const fetchUsers = async (): Promise<UsersResponse | null> => {
@@ -47,6 +60,7 @@ const Users = () => {
       search: searchTerm || undefined,
       status: statusFilter !== 'all' ? statusFilter : undefined,
       wallet_status: walletFilter !== 'all' ? walletFilter : undefined,
+      inactive_days: inactiveFilter !== 'all' ? Number(inactiveFilter) : undefined,
       page: currentPage,
       per_page: itemsPerPage,
       sort_field: sortField,
@@ -57,10 +71,15 @@ const Users = () => {
   };
 
   const { data: usersData, isLoading, error, refetch } = useQuery({
-    queryKey: ['users', searchTerm, statusFilter, walletFilter, currentPage, sortField, sortDirection],
+    queryKey: ['users', searchTerm, statusFilter, walletFilter, inactiveFilter, currentPage, sortField, sortDirection],
     queryFn: fetchUsers,
     placeholderData: (previousData) => previousData
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedUserIds([]);
+  }, [searchTerm, statusFilter, walletFilter, inactiveFilter]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -93,6 +112,62 @@ const Users = () => {
     } catch (error) {
       console.error('Failed to copy wallet address:', error);
       toast.error('Failed to copy wallet address');
+    }
+  };
+
+  const toggleSelectUser = (userId: number) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const toggleSelectAllOnPage = () => {
+    const sendableIds = (usersData?.users ?? [])
+      .filter((user) => user.phone_number && (user.active_device_count ?? 0) > 0)
+      .map((user) => user.id);
+
+    if (sendableIds.length > 0 && sendableIds.every((id) => selectedUserIds.includes(id))) {
+      setSelectedUserIds((prev) => prev.filter((id) => !sendableIds.includes(id)));
+    } else {
+      setSelectedUserIds((prev) => Array.from(new Set([...prev, ...sendableIds])));
+    }
+  };
+
+  const handleSendSelectedNotification = async () => {
+    const selectedUsers = (usersData?.users ?? []).filter((user) => selectedUserIds.includes(user.id));
+    const phoneNumbers = Array.from(new Set(
+      selectedUsers
+        .map((user) => user.phone_number)
+        .filter((phone): phone is string => Boolean(phone))
+    ));
+
+    if (phoneNumbers.length === 0) {
+      toast.error('Select at least one user with an active push device');
+      return;
+    }
+    if (!notificationTitle.trim() || !notificationBody.trim()) {
+      toast.error('Notification title and message are required');
+      return;
+    }
+    const ok = await confirm({
+      title: "Send reminder?",
+      description: `Send reminder to ${phoneNumbers.length} selected user(s)?`,
+      confirmLabel: "Send",
+    });
+    if (!ok) return;
+
+    setSendingNotification(true);
+    try {
+      await sendAdminPush({
+        target: 'selected',
+        title: notificationTitle.trim(),
+        body: notificationBody.trim(),
+        phone_numbers: phoneNumbers,
+        active_only: true,
+        data: { type: 'inactive_user_reminder' },
+      });
+    } finally {
+      setSendingNotification(false);
     }
   };
 
@@ -131,6 +206,20 @@ const Users = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const formatLastActive = (user: User) => {
+    if (!user.last_active_at) {
+      return 'No active device';
+    }
+
+    const days = user.last_active_days;
+    const date = formatDate(user.last_active_at);
+    if (typeof days !== 'number') {
+      return date;
+    }
+
+    return `${date} (${days === 0 ? 'today' : `${days}d ago`})`;
   };
 
   const truncateWallet = (wallet: string) => {
@@ -223,7 +312,7 @@ const Users = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {usersData?.users?.filter(u => u.verification_status === 'verified').length || 0}
+                {usersData?.verified_count ?? 0}
               </div>
               <p className="text-xs text-muted-foreground">
                 Successfully verified
@@ -238,7 +327,7 @@ const Users = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {usersData?.users?.filter(u => u.wallet_address && u.wallet_address !== '').length || 0}
+                {usersData?.wallet_users_count ?? 0}
               </div>
               <p className="text-xs text-muted-foreground">
                 With wallet addresses
@@ -253,7 +342,7 @@ const Users = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {usersData?.users?.filter(u => u.pin && u.pin !== '').length || 0}
+                {usersData?.pin_users_count ?? 0}
               </div>
               <p className="text-xs text-muted-foreground">
                 With security PINs
@@ -271,7 +360,7 @@ const Users = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-5">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Search</label>
                 <div className="relative">
@@ -312,6 +401,23 @@ const Users = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Inactive For</label>
+                <Select value={inactiveFilter} onValueChange={setInactiveFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Any activity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Any activity</SelectItem>
+                    <SelectItem value="7">7+ days</SelectItem>
+                    <SelectItem value="14">14+ days</SelectItem>
+                    <SelectItem value="30">30+ days</SelectItem>
+                    <SelectItem value="60">60+ days</SelectItem>
+                    <SelectItem value="90">90+ days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               
               <div className="space-y-2">
                 <label className="text-sm font-medium">Items per Page</label>
@@ -327,6 +433,50 @@ const Users = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Reminder notification
+            </CardTitle>
+            <CardDescription>
+              Select inactive users from the table and send them a push reminder.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Title</label>
+              <Input
+                value={notificationTitle}
+                onChange={(e) => setNotificationTitle(e.target.value)}
+                maxLength={255}
+              />
+            </div>
+            <div className="space-y-2 lg:col-span-2">
+              <label className="text-sm font-medium">Message</label>
+              <Textarea
+                value={notificationBody}
+                onChange={(e) => setNotificationBody(e.target.value)}
+                rows={2}
+                maxLength={1000}
+              />
+            </div>
+            <div className="lg:col-span-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                {selectedUserIds.length} selected user(s). Only users with active push devices can receive this.
+              </div>
+              <Button
+                className="bg-purple hover:bg-purple/90"
+                onClick={handleSendSelectedNotification}
+                disabled={sendingNotification || selectedUserIds.length === 0}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                {sendingNotification ? 'Sending…' : 'Send selected reminder'}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -358,6 +508,17 @@ const Users = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={
+                              (usersData?.users ?? []).some((user) => user.phone_number && (user.active_device_count ?? 0) > 0) &&
+                              (usersData?.users ?? [])
+                                .filter((user) => user.phone_number && (user.active_device_count ?? 0) > 0)
+                                .every((user) => selectedUserIds.includes(user.id))
+                            }
+                            onCheckedChange={toggleSelectAllOnPage}
+                          />
+                        </TableHead>
                         <TableHead 
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() => handleSort('username')}
@@ -402,6 +563,19 @@ const Users = () => {
                         <TableHead>PIN Status</TableHead>
                         <TableHead 
                           className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('last_active_at')}
+                        >
+                          <div className="flex items-center gap-2">
+                            Last Active
+                            {sortField === 'last_active_at' && (
+                              <span className="text-xs">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
                           onClick={() => handleSort('created_at')}
                         >
                           <div className="flex items-center gap-2">
@@ -420,12 +594,25 @@ const Users = () => {
                       {usersData?.users?.map((user) => (
                         <TableRow key={user.id}>
                           <TableCell>
+                            <Checkbox
+                              checked={selectedUserIds.includes(user.id)}
+                              disabled={!user.phone_number || (user.active_device_count ?? 0) === 0}
+                              onCheckedChange={() => toggleSelectUser(user.id)}
+                            />
+                          </TableCell>
+                          <TableCell>
                             <div className="flex items-center space-x-3">
                               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
                                 {user.username.charAt(0).toUpperCase()}
                               </div>
                               <div>
-                                <div className="font-medium">{user.username}</div>
+                                <button
+                                  type="button"
+                                  className="font-medium text-left hover:underline"
+                                  onClick={() => navigate(`/users/${user.id}`)}
+                                >
+                                  {user.username}
+                                </button>
                                 <div className="text-sm text-muted-foreground">ID: {user.id}</div>
                               </div>
                             </div>
@@ -480,6 +667,16 @@ const Users = () => {
                             {getPinStatusBadge(user.pin)}
                           </TableCell>
                           <TableCell>
+                            <div className="text-sm">
+                              {formatLastActive(user)}
+                              {(user.active_device_count ?? 0) > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                  {user.active_device_count} active device(s)
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-muted-foreground" />
                               <span className="text-sm">
@@ -498,7 +695,7 @@ const Users = () => {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => navigate(`/users/${user.id}`)}>
                                   <Eye className="mr-2 h-4 w-4" />
                                   View Details
                                 </DropdownMenuItem>
